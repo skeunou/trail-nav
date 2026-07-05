@@ -1,4 +1,4 @@
-const APP="tn-app-v1";
+const APP="tn-app-v2";
 const TILES="tn-tiles-v1";
 const SHELL=[
   "./","./index.html","./manifest.json","./icon-192.png","./icon-512.png",
