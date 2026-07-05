@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0f">
+<link rel="manifest" href="manifest.json">
+<title>Trail Nav</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0d0f;--surf:#141416;--surf2:#1c1c20;--bdr:#2a2a30;--acc:#e8ff47;--acc2:#ff6b35;--warn:#ff9500;--txt:#f0f0f0;--mut:#6b6b78;--grn:#4ade80;--red:#f87171}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;overflow:hidden}
+#map{position:absolute;inset:0;background:var(--bg)}
+.leaflet-container{background:#0d0d0f;font-family:'DM Sans',sans-serif}
+#hud{position:absolute;top:0;left:0;right:0;z-index:1000;display:flex;gap:6px;padding:8px;padding-top:calc(8px + env(safe-area-inset-top))}
+.chip{flex:1;background:rgba(20,20,22,.92);border:1px solid var(--bdr);border-radius:10px;padding:6px 8px;backdrop-filter:blur(6px)}
+.chip .l{font-size:9px;letter-spacing:1px;color:var(--mut);text-transform:uppercase}
+.chip .v{font-family:'Bebas Neue';font-size:24px;line-height:1;letter-spacing:1px}
+.chip.off .v{color:var(--warn)}
+#ctr{position:absolute;left:0;right:0;bottom:0;z-index:1000;padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+#profWrap{background:rgba(20,20,22,.94);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;backdrop-filter:blur(6px)}
+#profBar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;font-family:'Bebas Neue';letter-spacing:2px;font-size:15px}
+#profBar span{color:var(--acc)}
+#profBody{height:0;transition:height .22s;position:relative}
+#profBody.open{height:34vh}
+#profBody canvas{padding:6px 8px 8px}
+.btnrow{display:flex;gap:8px}
+button{flex:1;border:none;border-radius:10px;padding:12px 8px;font-family:'Bebas Neue';font-size:16px;letter-spacing:1.5px;background:var(--surf2);color:var(--txt);border:1px solid var(--bdr)}
+button.p{background:var(--acc);color:#000;border-color:var(--acc)}
+button:disabled{opacity:.4}
+button.act{outline:2px solid var(--acc)}
+#status{font-size:12px;color:var(--mut);text-align:center;min-height:15px}
+#status.w{color:var(--warn)}
+.locbtn{position:absolute;right:10px;bottom:calc(150px + env(safe-area-inset-bottom));z-index:1000;width:52px;height:52px;flex:none;border-radius:50%;background:var(--acc);color:#000;font-size:22px;display:flex;align-items:center;justify-content:center;border:none}
+.locbtn.act{background:var(--acc2);color:#fff}
+.layerbtn{position:absolute;right:10px;top:calc(70px + env(safe-area-inset-top));z-index:1000;width:44px;height:44px;flex:none;border-radius:10px;background:rgba(20,20,22,.92);border:1px solid var(--bdr);color:var(--txt);font-family:'Bebas Neue';font-size:13px}
+.me{width:18px;height:18px;background:var(--acc2);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px var(--acc2)}
+.snap{width:12px;height:12px;background:var(--acc);border:2px solid #000;border-radius:50%}
+#sheet{position:absolute;inset:0;z-index:2000;background:rgba(0,0,0,.6);display:none;align-items:flex-end}
+#sheet.on{display:flex}
+#sheetC{width:100%;background:var(--surf);border-top:2px solid var(--acc);border-radius:16px 16px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+#sheetC h3{font-family:'Bebas Neue';letter-spacing:2px;margin:0 0 8px}
+#sheetC p{font-size:13px;color:var(--mut);margin:4px 0}
+#sheetC b{color:var(--acc)}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="hud">
+  <div class="chip"><div class="l">Parcouru</div><div class="v" id="hDone">—</div></div>
+  <div class="chip"><div class="l">Restant</div><div class="v" id="hLeft">—</div></div>
+  <div class="chip" id="hOffChip"><div class="l">Écart trace</div><div class="v" id="hOff">—</div></div>
+</div>
+<button class="layerbtn" id="layerBtn">TOPO</button>
+<button class="locbtn" id="locBtn">◎</button>
+<div id="ctr">
+  <div id="profWrap">
+    <div id="profBar" id="profToggle">PROFIL <span id="profStat"></span></div>
+    <div id="profBody"><canvas id="prof"></canvas></div>
+  </div>
+  <div class="btnrow">
+    <button id="importBtn">TRACE GPX</button>
+    <button id="dlBtn" disabled>CACHE ZONE</button>
+    <button class="p" id="infoBtn">i</button>
+  </div>
+  <div id="status">Importe une trace GPX pour démarrer.</div>
+</div>
+<input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml">
+<div id="sheet"><div id="sheetC">
+  <h3>CACHE HORS-LIGNE</h3>
+  <p>Zoom <b>14–16</b> · buffer serré autour de la trace.</p>
+  <p id="sheetCount">—</p>
+  <p style="color:var(--warn)">Le téléchargement en masse de tuiles est toléré à faible volume perso mais contraire aux CGU des serveurs. Reste raisonnable.</p>
+  <div class="btnrow" style="margin-top:12px">
+    <button id="sheetCancel">ANNULER</button>
+    <button class="p" id="sheetGo">TÉLÉCHARGER</button>
+  </div>
+</div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
+<script>
+const TILE={topo:"https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",osm:"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"};
+const SUBS=["a","b","c"];
+let map,traceLayer,meMarker,snapMarker,chart,baseLayer;
+let coords=[],line=null,cumDist=[],eles=[],totalKm=0,gainPos=0;
+let watchId=null,follow=true;
+let curLayer=localStorage.getItem("tn_layer")||"topo";
+
+function el(id){return document.getElementById(id)}
+function setStatus(t,w){const s=el("status");s.textContent=t;s.className=w?"w":""}
+function fmtKm(k){return k<10?k.toFixed(2):k.toFixed(1)}
+
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("tn",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbPut(k,v){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+async function idbGet(k){const db=await idb();return new Promise((res)=>{const t=db.transaction("kv","readonly");const q=t.objectStore("kv").get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)})}
+
+function initMap(){
+  map=L.map("map",{zoomControl:false,attributionControl:false}).setView([45.19,5.72],12);
+  L.control.zoom({position:"bottomleft"}).addTo(map);
+  setBase(curLayer);
+  map.on("dragstart",()=>{follow=false;el("locBtn").classList.remove("act")});
+}
+function setBase(k){
+  if(baseLayer)map.removeLayer(baseLayer);
+  baseLayer=L.tileLayer(TILE[k],{subdomains:SUBS,maxZoom:17,crossOrigin:true}).addTo(map);
+  curLayer=k;localStorage.setItem("tn_layer",k);
+  el("layerBtn").textContent=k==="topo"?"TOPO":"OSM";
+}
+
+function haversine(a,b){const R=6371,dLat=(b[1]-a[1])*Math.PI/180,dLon=(b[0]-a[0])*Math.PI/180,la1=a[1]*Math.PI/180,la2=b[1]*Math.PI/180;const h=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+
+function parseGPX(text){
+  const doc=new DOMParser().parseFromString(text,"application/xml");
+  let pts=[...doc.getElementsByTagName("trkpt")];
+  if(!pts.length)pts=[...doc.getElementsByTagName("rtept")];
+  const c=[];
+  for(const p of pts){
+    const lat=parseFloat(p.getAttribute("lat")),lon=parseFloat(p.getAttribute("lon"));
+    const e=p.getElementsByTagName("ele")[0];
+    if(isFinite(lat)&&isFinite(lon))c.push([lon,lat,e?parseFloat(e.textContent):0]);
+  }
+  return c;
+}
+
+function buildTrace(c){
+  coords=c;
+  line=turf.lineString(coords.map(p=>[p[0],p[1]]));
+  cumDist=[0];eles=[coords[0][2]];gainPos=0;
+  for(let i=1;i<coords.length;i++){
+    cumDist[i]=cumDist[i-1]+haversine(coords[i-1],coords[i]);
+    eles[i]=coords[i][2];
+    const d=coords[i][2]-coords[i-1][2];if(d>2)gainPos+=d;
+  }
+  totalKm=cumDist[cumDist.length-1];
+  drawTrace();drawProfile();
+  el("dlBtn").disabled=false;
+  el("profStat").textContent=fmtKm(totalKm)+" km · "+Math.round(gainPos)+" D+";
+  setStatus("Trace chargée. « Me localiser » pour te situer.");
+}
+
+function drawTrace(){
+  if(traceLayer)map.removeLayer(traceLayer);
+  const latlngs=coords.map(p=>[p[1],p[0]]);
+  traceLayer=L.polyline(latlngs,{color:"#e8ff47",weight:4,opacity:.9}).addTo(map);
+  map.fitBounds(traceLayer.getBounds(),{padding:[40,40]});
+}
+
+function drawProfile(){
+  const step=Math.max(1,Math.floor(coords.length/400));
+  const lx=[],ly=[];
+  for(let i=0;i<coords.length;i+=step){lx.push(cumDist[i]);ly.push(eles[i])}
+  if(chart)chart.destroy();
+  chart=new Chart(el("prof"),{type:"line",data:{labels:lx,datasets:[
+    {data:ly,borderColor:"#e8ff47",borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:"rgba(232,255,71,.08)",tension:.3},
+    {label:"pos",data:[],borderColor:"#ff6b35",backgroundColor:"#ff6b35",pointRadius:5,showLine:false}
+  ]},options:{animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{
+    x:{type:"linear",ticks:{color:"#6b6b78",font:{size:9},callback:v=>Math.round(v)+"k"},grid:{color:"#2a2a30"}},
+    y:{ticks:{color:"#6b6b78",font:{size:9}},grid:{color:"#1c1c20"}}
+  }}});
+}
+
+function eleAt(km){
+  if(km<=0)return eles[0];if(km>=totalKm)return eles[eles.length-1];
+  let i=1;while(i<cumDist.length&&cumDist[i]<km)i++;
+  const t=(km-cumDist[i-1])/(cumDist[i]-cumDist[i-1]||1);
+  return eles[i-1]+(eles[i]-eles[i-1])*t;
+}
+
+function onPos(p){
+  const lon=p.coords.longitude,lat=p.coords.latitude;
+  if(!meMarker){meMarker=L.marker([lat,lon],{icon:L.divIcon({className:"",html:'<div class="me"></div>',iconSize:[18,18]})}).addTo(map)}
+  else meMarker.setLatLng([lat,lon]);
+  if(follow)map.setView([lat,lon],Math.max(map.getZoom(),15));
+  if(!line)return;
+  const snap=turf.nearestPointOnLine(line,turf.point([lon,lat]),{units:"kilometers"});
+  const along=snap.properties.location,off=snap.properties.dist*1000;
+  const sc=snap.geometry.coordinates;
+  if(!snapMarker){snapMarker=L.marker([sc[1],sc[0]],{icon:L.divIcon({className:"",html:'<div class="snap"></div>',iconSize:[12,12]})}).addTo(map)}
+  else snapMarker.setLatLng([sc[1],sc[0]]);
+  el("hDone").textContent=fmtKm(along);
+  el("hLeft").textContent=fmtKm(Math.max(0,totalKm-along));
+  el("hOff").textContent=Math.round(off)+"m";
+  el("hOffChip").classList.toggle("off",off>25);
+  if(chart){chart.data.datasets[1].data=[{x:along,y:eleAt(along)}];chart.update("none")}
+}
+
+function toggleLocate(){
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;el("locBtn").classList.remove("act");setStatus("Localisation arrêtée.");return}
+  if(!navigator.geolocation){setStatus("Géolocalisation indisponible.",1);return}
+  follow=true;el("locBtn").classList.add("act");setStatus("Recherche GPS…");
+  watchId=navigator.geolocation.watchPosition(onPos,e=>setStatus("GPS : "+e.message,1),{enableHighAccuracy:true,maximumAge:2000,timeout:15000});
+}
+
+function lon2x(lon,z){return Math.floor((lon+180)/360*2**z)}
+function lat2y(lat,z){const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*2**z)}
+function tileList(){
+  const zs=[14,15,16],b=0.004;
+  let mnLon=180,mxLon=-180,mnLat=90,mxLat=-90;
+  for(const c of coords){mnLon=Math.min(mnLon,c[0]);mxLon=Math.max(mxLon,c[0]);mnLat=Math.min(mnLat,c[1]);mxLat=Math.max(mxLat,c[1])}
+  mnLon-=b;mxLon+=b;mnLat-=b;mxLat+=b;
+  const out=[];
+  for(const z of zs){
+    const x0=lon2x(mnLon,z),x1=lon2x(mxLon,z),y0=lat2y(mxLat,z),y1=lat2y(mnLat,z);
+    for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)out.push([z,x,y]);
+  }
+  return out;
+}
+function tileUrl(z,x,y){return TILE[curLayer].replace("{s}",SUBS[(x+y)%3]).replace("{z}",z).replace("{x}",x).replace("{y}",y)}
+
+async function downloadZone(){
+  const list=tileList();
+  const cache=await caches.open("tn-tiles-v1");
+  let done=0,fail=0;el("sheet").classList.remove("on");
+  setStatus("Téléchargement 0/"+list.length+"…",1);
+  const chunk=6;
+  for(let i=0;i<list.length;i+=chunk){
+    await Promise.all(list.slice(i,i+chunk).map(async t=>{
+      const u=tileUrl(...t);
+      try{const r=await fetch(u,{mode:"cors"});if(r.ok)await cache.put(u,r.clone());else fail++}catch{fail++}
+      done++;
+    }));
+    setStatus("Téléchargement "+done+"/"+list.length+"…",1);
+  }
+  setStatus("Zone en cache ✓ "+(list.length-fail)+" tuiles"+(fail?" ("+fail+" échecs)":"")+".");
+}
+
+el("importBtn").onclick=()=>el("file").click();
+el("file").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{const c=parseGPX(r.result);if(c.length<2){setStatus("GPX illisible ou vide.",1);return}buildTrace(c);idbPut("trace",c)};
+  r.readAsText(f);
+};
+el("locBtn").onclick=toggleLocate;
+el("layerBtn").onclick=()=>setBase(curLayer==="topo"?"osm":"topo");
+el("profBar").onclick=()=>el("profBody").classList.toggle("open");
+el("dlBtn").onclick=()=>{el("sheetCount").innerHTML="≈ <b>"+tileList().length+"</b> tuiles à télécharger.";el("sheet").classList.add("on")};
+el("infoBtn").onclick=()=>{el("sheetCount").innerHTML=coords.length?"≈ <b>"+tileList().length+"</b> tuiles pour la trace actuelle.":"Importe d'abord une trace.";el("sheet").classList.add("on")};
+el("sheetCancel").onclick=()=>el("sheet").classList.remove("on");
+el("sheetGo").onclick=()=>{if(coords.length)downloadZone();else el("sheet").classList.remove("on")};
+
+let wl=null;
+async function wake(){try{if("wakeLock"in navigator)wl=await navigator.wakeLock.request("screen")}catch{}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")wake()});
+
+initMap();wake();
+idbGet("trace").then(c=>{if(c&&c.length>1)buildTrace(c)});
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
