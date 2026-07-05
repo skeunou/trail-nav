@@ -64,7 +64,8 @@ input[type=file]{display:none}
   <div class="btnrow">
     <button id="importBtn">TRACE GPX</button>
     <button id="dlBtn" disabled>CACHE ZONE</button>
-    <button class="p" id="infoBtn">i</button>
+    <!-- bouton info retiré (redondant avec CACHE ZONE) — conservé masqué, réactivable -->
+    <button class="p" id="infoBtn" style="display:none">i</button>
   </div>
   <div id="status">Importe une trace GPX pour démarrer.</div>
 </div>
@@ -146,8 +147,10 @@ function buildTrace(c){
 function drawTrace(){
   if(traceLayer)map.removeLayer(traceLayer);
   const latlngs=coords.map(p=>[p[1],p[0]]);
-  traceLayer=L.polyline(latlngs,{color:"#e8ff47",weight:4,opacity:.9}).addTo(map);
-  map.fitBounds(traceLayer.getBounds(),{padding:[40,40]});
+  const halo=L.polyline(latlngs,{color:"#ffffff",weight:7,opacity:.5});
+  const main=L.polyline(latlngs,{color:"#38bdf8",weight:4,opacity:.95});
+  traceLayer=L.layerGroup([halo,main]).addTo(map);
+  map.fitBounds(main.getBounds(),{padding:[40,40]});
 }
 
 function drawProfile(){
@@ -156,7 +159,7 @@ function drawProfile(){
   for(let i=0;i<coords.length;i+=step){lx.push(cumDist[i]);ly.push(eles[i])}
   if(chart)chart.destroy();
   chart=new Chart(el("prof"),{type:"line",data:{labels:lx,datasets:[
-    {data:ly,borderColor:"#e8ff47",borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:"rgba(232,255,71,.08)",tension:.3},
+    {data:ly,borderColor:"#38bdf8",borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:"rgba(56,189,248,.10)",tension:.3},
     {label:"pos",data:[],borderColor:"#ff6b35",backgroundColor:"#ff6b35",pointRadius:5,showLine:false}
   ]},options:{animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{
     x:{type:"linear",ticks:{color:"#6b6b78",font:{size:9},callback:v=>Math.round(v)+"k"},grid:{color:"#2a2a30"}},
@@ -249,7 +252,7 @@ async function wake(){try{if("wakeLock"in navigator)wl=await navigator.wakeLock.
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")wake()});
 
 initMap();wake();
-idbGet("trace").then(c=>{if(c&&c.length>1)buildTrace(c)});
+idbGet("trace").then(c=>{if(c&&c.length>1){buildTrace(c);toggleLocate();}});
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
